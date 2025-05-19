@@ -75,4 +75,38 @@ router.delete('/:id', (req, res) => {
   res.json({ message: 'Envelope deleted', envelope: deleted });
 });
 
+// POST /envelopes/transfer - Transfer budget from one envelope to another
+router.post('/transfer', (req, res) => {
+  const { fromId, toId, amount } = req.body;
+
+  if (
+    typeof fromId !== 'number' ||
+    typeof toId !== 'number' ||
+    typeof amount !== 'number' ||
+    amount <= 0
+  ) {
+    return res.status(400).json({ error: 'Invalid transfer data' });
+  }
+
+  const fromEnvelope = data.envelopes.find(env => env.id === fromId);
+  const toEnvelope = data.envelopes.find(env => env.id === toId);
+
+  if (!fromEnvelope || !toEnvelope) {
+    return res.status(404).json({ error: 'One or both envelopes not found' });
+  }
+
+  if (fromEnvelope.budget < amount) {
+    return res.status(400).json({ error: 'Insufficient funds in source envelope' });
+  }
+
+  fromEnvelope.budget -= amount;
+  toEnvelope.budget += amount;
+
+  res.json({
+    message: `Transferred $${amount} from '${fromEnvelope.name}' to '${toEnvelope.name}'`,
+    from: fromEnvelope,
+    to: toEnvelope
+  });
+});
+
 module.exports = router;
