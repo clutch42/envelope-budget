@@ -1,16 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { envelopes, getNextId } = require('../data/envelopesData');
+const data = require('../data/envelopesData');
 
 // GET /envelopes - Retrieve all envelopes
 router.get('/', (req, res) => {
-  res.json(envelopes);
+  res.json(data.envelopes);
 });
 
 // GET /envelopes/:id - Retrieve a specific envelope
 router.get('/:id', (req, res) => {
   const envelopeId = parseInt(req.params.id);
-  const envelope = envelopes.find(env => env.id === envelopeId);
+  const envelope = data.envelopes.find(env => env.id === envelopeId);
 
   if (!envelope) {
     return res.status(404).json({ error: 'Envelope not found' });
@@ -28,19 +28,19 @@ router.post('/', (req, res) => {
   }
 
   const newEnvelope = {
-    id: getNextId(),
+    id: data.getNextId(),
     name,
     budget
   };
 
-  envelopes.push(newEnvelope);
+  data.envelopes.push(newEnvelope);
   res.status(201).json(newEnvelope);
 });
 
 // PUT /envelopes/:id - Update a specific envelope
 router.put('/:id', (req, res) => {
   const envelopeId = parseInt(req.params.id);
-  const envelope = envelopes.find(env => env.id === envelopeId);
+  const envelope = data.envelopes.find(env => env.id === envelopeId);
 
   if (!envelope) {
     return res.status(404).json({ error: 'Envelope not found' });
@@ -60,6 +60,19 @@ router.put('/:id', (req, res) => {
   }
 
   res.json(envelope);
+});
+
+// DELETE /envelopes/:id - Delete a specific envelope
+router.delete('/:id', (req, res) => {
+  const envelopeId = parseInt(req.params.id);
+  const index = data.envelopes.findIndex(env => env.id === envelopeId);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Envelope not found' });
+  }
+
+  const deleted = data.envelopes.splice(index, 1)[0];
+  res.json({ message: 'Envelope deleted', envelope: deleted });
 });
 
 module.exports = router;
