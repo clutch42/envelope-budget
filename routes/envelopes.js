@@ -1,82 +1,94 @@
 const express = require('express');
 const router = express.Router();
 const data = require('../data/envelopesData');
+const { Envelope } = require('../models');
 
 // GET /envelopes - Retrieve all envelopes
-router.get('/', (req, res) => {
-  res.json(data.envelopes);
+router.get('/', async (req, res) => {
+  try {
+    const envelopes = await Envelope.findAll();
+    res.json(envelopes);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve envelopes'});
+  }
 });
 
 // GET /envelopes/:id - Retrieve a specific envelope
-router.get('/:id', (req, res) => {
-  const envelopeId = parseInt(req.params.id);
-  const envelope = data.envelopes.find(env => env.id === envelopeId);
-
-  if (!envelope) {
-    return res.status(404).json({ error: 'Envelope not found' });
+router.get('/:id', async (req, res) => {
+  try {
+    const envelope = await Envelope.findByPk(req.params.id);
+    if (!envelope) {
+      return res.status(404).json({ error: 'Envelope not found' });
+    }
+    res.json(envelope);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve envelope' });
   }
 
-  res.json(envelope);
+
 });
 
 // POST /envelopes - Create a new envelope
-router.post('/', (req, res) => {
-  const { name, budget } = req.body;
+router.post('/', async (req, res) => {
+  const { name, balance } = req.body;
 
-  if (!name || typeof budget !== 'number' || budget < 0) {
+  if (!name || typeof balance !== 'number' || balance < 0) {
     return res.status(400).json({ error: 'Invalid envelope data' });
   }
 
-  const newEnvelope = {
-    id: data.getNextId(),
-    name,
-    budget
-  };
-
-  data.envelopes.push(newEnvelope);
-  res.status(201).json(newEnvelope);
+  try {
+    const newEnvelope = await Envelope.create( {name, balance });
+    res.status(201).json(newEnvelope);
+  } catch {
+    res.status(500).json({ error: 'Failed to create envelope' });
+  }
 });
 
 // PUT /envelopes/:id - Update a specific envelope
-router.put('/:id', (req, res) => {
-  const envelopeId = parseInt(req.params.id);
-  const envelope = data.envelopes.find(env => env.id === envelopeId);
+router.put('/:id', async (req, res) => {
+  const { name, balance } = req.body;
 
-  if (!envelope) {
-    return res.status(404).json({ error: 'Envelope not found' });
-  }
-
-  const { name, budget } = req.body;
-
-  if (name !== undefined) {
-    envelope.name = name;
-  }
-
-  if (budget !== undefined) {
-    if (typeof budget !== 'number' || budget < 0) {
-      return res.status(400).json({ error: 'Invalid budget' });
+  try {
+    const envelope = await Envelope.findByPk(req.params.id);
+    
+    if (!envelope) {
+      return res.status(404).json({ error: 'Envelope not found' });
     }
-    envelope.budget = budget;
-  }
 
-  res.json(envelope);
+    if (name !== undefined) {
+      envelope.name = name;
+    }
+    
+    if (balance !== undefined) {
+      if (typeof balance !== 'number' || balance < 0) {
+        return res.status(400).json({ error: 'Invalid balance' });
+      }
+      envelope.balance = balance;
+    }
+    await envelope.save();
+    res.json(envelope);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update envelope' })
+  }
 });
 
 // DELETE /envelopes/:id - Delete a specific envelope
 router.delete('/:id', (req, res) => {
   const envelopeId = parseInt(req.params.id);
-  const index = data.envelopes.findIndex(env => env.id === envelopeId);
 
-  if (index === -1) {
-    return res.status(404).json({ error: 'Envelope not found' });
+  try {
+    const deletedCount = Envelope.destroy({ where: { id: req.params.id } });
+    if (deletedCount === 0) {
+      return res.status(404).json({ error: 'Envelope not found' });
+    }
+    res.json({ message: 'Envelope deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete envelope' });
   }
-
-  const deleted = data.envelopes.splice(index, 1)[0];
-  res.json({ message: 'Envelope deleted', envelope: deleted });
 });
 
 // POST /envelopes/transfer - Transfer budget from one envelope to another
-router.post('/transfer', (req, res) => {
+router.post('/transfer', async (req, res) => {
   const { fromId, toId, amount } = req.body;
 
   if (
@@ -88,25 +100,38 @@ router.post('/transfer', (req, res) => {
     return res.status(400).json({ error: 'Invalid transfer data' });
   }
 
-  const fromEnvelope = data.envelopes.find(env => env.id === fromId);
-  const toEnvelope = data.envelopes.find(env => env.id === toId);
+  const t = await Envelope.sequelize.transaction();
 
-  if (!fromEnvelope || !toEnvelope) {
-    return res.status(404).json({ error: 'One or both envelopes not found' });
+  try {
+    const fromEnvelope = await Envelope.findByPk(fromId);
+    const toEnvelope = await Envelope.findByPk(toId);
+
+    if (!fromEnvelope || !toEnvelope) {
+      await t.rollback();
+      return res.status(404).json({ error: 'One or both envelopes not found' });
+    }
+
+    if (fromEnvelope.balance < amount) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Insufficient funds in source envelope' });
+    }
+
+    fromEnvelope.balance -= amount;
+    toEnvelope.balance += amount;
+
+    await fromEnvelope.save({ transaction: t });
+    await toEnvelope.save({ transaction: t });
+
+    await t.commit();
+    
+    res.json({
+      message: `Transferred $${amount} from '${fromEnvelope.name}' to '${toEnvelope.name}'`,
+      from: fromEnvelope,
+      to: toEnvelope
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Transfer failed', details: err.message })
   }
-
-  if (fromEnvelope.budget < amount) {
-    return res.status(400).json({ error: 'Insufficient funds in source envelope' });
-  }
-
-  fromEnvelope.budget -= amount;
-  toEnvelope.budget += amount;
-
-  res.json({
-    message: `Transferred $${amount} from '${fromEnvelope.name}' to '${toEnvelope.name}'`,
-    from: fromEnvelope,
-    to: toEnvelope
-  });
 });
 
 module.exports = router;
