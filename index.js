@@ -11,9 +11,14 @@ const cors = require('cors');
 sequelize.authenticate()
   .then(() => {
     console.log('✅ Database connected.');
+
+    return sequelize.sync({ alter: true });
+  })
+  .then(() => {
+    console.log('✅ Database synchronized (alter mode)');
   })
   .catch((err) => {
-    console.error('❌ Database connection error:', err);
+    console.error('❌ Error during DB setup:', err);
   });
 
 app.use(cors());
