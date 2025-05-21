@@ -76,6 +76,7 @@ router.get('/', async (req, res) => {
     const envelopes = await Envelope.findAll();
     res.json(envelopes);
   } catch (err) {
+    console.error('Error fetching envelopes:', err); 
     res.status(500).json({ error: 'Failed to retrieve envelopes'});
   }
 });
