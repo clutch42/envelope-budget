@@ -6,6 +6,7 @@ const envelopeRoutes = require('./routes/envelopes');
 const transactionsRouter = require('./routes/transactions');
 const { sequelize } = require('./models'); 
 const { swaggerUi, specs } = require('./swagger');
+const cors = require('cors');
 
 sequelize.authenticate()
   .then(() => {
@@ -15,6 +16,7 @@ sequelize.authenticate()
     console.error('❌ Database connection error:', err);
   });
 
+app.use(cors());
 app.use(express.json());
 
 app.use('/envelopes', envelopeRoutes);
