@@ -5,6 +5,7 @@ const PORT = 3000;
 const envelopeRoutes = require('./routes/envelopes');
 const transactionsRouter = require('./routes/transactions');
 const { sequelize } = require('./models'); 
+const { swaggerUi, specs } = require('./swagger');
 
 sequelize.authenticate()
   .then(() => {
@@ -23,7 +24,7 @@ app.get('/', (req, res) => {
     res.send('Hello World');
 });
 
-
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
